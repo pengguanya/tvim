@@ -6,8 +6,7 @@
 
 # which vim used by shell
 vi=nvim
-default_session=tvim
-
+sessionName=tvim
 
 # function to check filetype
 function isFileType {
@@ -53,42 +52,49 @@ if [ $# -gt 1 ]; then
 fi
 
 # Check if tmux session exists
-tmux has-session -t "$default_session"
+tmux has-session -t "$sessionName"
 
 # If tmux session exists, open the tmux session
 if [ $? -eq 0 ]; then
-    tmux a -t "$default_session"
+    read -p "Session $sessionName already exists. Do you want to overwrite it? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        tmux kill-session -t $sessionName
+        tmux new-session -s $sessionName -d
+    else
+        tmux attach -t $sessionName
+    fi
 else
     # Create a new tmux session
-    tmux new-session -s "$default_session" -d
-    
-    # Split the window into two panes vertically
-    tmux split-window -v -p 20
-    
-    # Select the top window and open Vim
-    tmux select-pane -t 0
-    tmux send-keys "$vi" C-m
-    
-    if [ $# -eq 1 ]; then
-        file="$1"
-    
-        # Select the bottom window and open the REPL
-        tmux select-pane -t 1
-        
-        # Check for the mode/file extension"
-        if [ "$file" == "python" ] || [ "$file" == ".py" ] || [[ $(isPython "$file") == "True" ]]; then
-            tmux send-keys "python" C-m
-        elif [ "$file" == "R" ] || [ "$file" == ".R" ] || [[ $(isR "$file") == "True" ]]; then
-            tmux send-keys "R" C-m
-        else
-            echo "Error: Invalid argument. Usage: ./tvim.sh <_> or <mode/file_extension>"
-            exit 1
-    
-        # Go back to the top window
-        tmux select-pane -t 0
-        fi
-    fi
-    
-    # Attach the tvim session
-    tmux attach-session -t "$default_session"
+    tmux new-session -s "$sessionName" -d
 fi
+    
+# Split the window into two panes vertically
+tmux split-window -v -p 20
+    
+# Select the top window and open Vim
+tmux select-pane -t 0
+tmux send-keys "$vi" C-m
+
+if [ $# -eq 1 ]; then
+    file="$1"
+
+    # Select the bottom window and open the REPL
+    tmux select-pane -t 1
+    
+    # Check for the mode/file extension"
+    if [ "$file" == "python" ] || [ "$file" == ".py" ] || [[ $(isPython "$file") == "True" ]]; then
+        tmux send-keys "python" C-m
+    elif [ "$file" == "R" ] || [ "$file" == ".R" ] || [[ $(isR "$file") == "True" ]]; then
+        tmux send-keys "R" C-m
+    else
+        echo "Error: Invalid argument. Usage: ./tvim.sh <_> or <mode/file_extension>"
+        exit 1
+
+    fi
+    # Go back to the top window
+    tmux select-pane -t 0
+fi
+
+# Attach the tvim session
+tmux attach-session -t "$sessionName"
