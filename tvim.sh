@@ -4,8 +4,8 @@
 # The left pane will open Vim and the right pane will open either
 # a Python REPL or an R REPL, depending on the specified mode or file extension.
 
-# which vim used by shell
-vi=nvim
+# Constant and options
+vi=nvim # which vim used by shell
 sessionName=tvim
 
 # function to check filetype
@@ -19,29 +19,49 @@ function isFileType {
   fi
 }
 
-# function to check if file is python
+# Check if file is python script
 function isPython {
   local file=$1
   echo $(isFileType $file "py")
 }
 
-# function to check if file is R
+# Check if file is R script
 function isR {
   local file=$1
   echo $(isFileType $file "R")
 }
 
-function is_filename {
-    if [[ "$1" =~ ^[^\.]+\.[^\.]+$ ]]; then
-      echo "True"
-    else
-      echo "False"
-    fi
+# Expand relative path to absolute path
+function get_absolute_path {
+  # resolve path relative to the current directory
+  local path="$1"
+  if [[ "$path" = /* ]]; then
+    echo "$path"
+  elif [[ "$path" == "." ]]; then
+    echo "$(pwd)"
+  elif [[ "$path" == ".." ]]; then
+    echo "$(dirname "$(pwd)")"
+  else
+    echo "$(pwd)/$path"
+  fi
 }
 
+# Check if the argument is a valid file path with extention
+function is_valid_path {
+  local path="$1"
+  if [[ "$path" =~ ^(.+\/)*[^/]+\.[^/]+$ ]]; then
+    echo "True"
+  else
+    echo "False"
+  fi
+}
+
+# Function to echo file full path if input path is valid
 function echo_file {
-    if [[ $(is_filename $1) == "True" ]]; then
-        echo $1
+    local path="$1"
+    local cmd_sep="$2"
+    if [[ $(is_valid_path "$path" ) == "True" ]]; then
+        echo "${cmd_sep}$(get_absolute_path $path)"
     fi
 }
 
@@ -74,7 +94,7 @@ tmux split-window -v -p 20
     
 # Select the top window and open Vim
 tmux select-pane -t 0
-tmux send-keys "$vi" C-m
+tmux send-keys "$vi" "$(echo_file $1 ' ')" C-m
 
 if [ $# -eq 1 ]; then
     file="$1"
