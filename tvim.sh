@@ -3,8 +3,6 @@
 shopt -s extglob
 
 # --- Constants ---
-# Set default value for -m option
-# mode="bash"
 session=tvim
 editor_cmd=nvim
 editor_window=Editor
@@ -146,5 +144,5 @@ run_cmd_in_path "$path" "$session" "$terminal_window" "clear"
 tmux select-window -t "${session}:${editor_window}"
 
 # Attach to tvim session
-tmux select-pane -t "${session}:${editor_window}.0"
+tmux select-pane -t "${session}:${editor_window}.${top_pane}"
 tmux attach-session -t "${session}"
