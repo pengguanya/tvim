@@ -1,148 +1,126 @@
 #!/bin/bash
 
-# This script will create a new tmux session with two panes horizontally.
-# The left pane will open Vim and the right pane will open either
-# a Python REPL or an R REPL, depending on the specified mode or file extension.
+shopt -s extglob
 
-# Constant and options
-editor=nvim # which vim used by shell
-sessionName=tvim
+# --- Constants ---
+# Set default value for -m option
+# mode="bash"
+editor=nvim
+session=tvim
+window=editor
 
-# Get file extension from path
-function get_extension {
-  local path=$1
-  # Get the file name from the path
-  filename=$(basename "$path")
-
-  # Extract all characters after the last dot in the file name
-  echo "${filename##*.}"
-}
-
-# Check filetype
-function isFileType {
-  local file=$1
-  local fileType=$2
-  if [[ "$(get_extension $file)" == "$fileType" ]]; then
-    echo "True"
-  else
-    echo "False"
+# -- Functions ---
+# Get file extension
+get_file_extension() {
+  filename=$1
+  extension="${filename##*.}"
+  if [ "$extension" = "$filename" ]; then
+    extension=""
   fi
+  echo "$extension"
 }
 
-# Check if file is python script
-function isPython {
-  local file=$1
-  echo $(isFileType $file "py")
-}
-
-# Check if file is R script
-function isR {
-  local file=$1
-  echo $(isFileType $file "R")
-}
-
-# Expand relative path to absolute path
-function get_absolute_path {
-  # resolve path relative to the current directory
-  local path="$1"
-  if [[ "$path" = /* ]]; then
-    echo "$path"
-  elif [[ "$path" == "." ]]; then
-    echo "$(pwd)"
-  elif [[ "$path" == ".." ]]; then
-    echo "$(dirname "$(pwd)")"
-  else
-    echo "$(pwd)/$path"
-  fi
-}
-
-# Function to echo file full path if input path is valid
-function echo_file {
-    local path="$1"
-    local cmd_sep="$2"
-    if [[ $(is_valid_path "$path" ) == "True" ]]; then
-        echo "${cmd_sep}$(get_absolute_path $path)"
-    fi
-}
-
-# Make command based on path
-function make_cmd_path {
-  local cmd=$1
-  local path={$2-"None"}
-
-  if [ "$path" == "None" ]; then
-    echo "$cmd ."
-  elif [ -d "$path" ] || [ -f "$path" ]; then
-    echo "$cmd $(get_absolute_path $path)"
-  else
-    echo "$cmd" .
-  fi
-}
-
-# Make command based on mode
-function make_cmd_mode {
-  local mode="$1"
-  local path="$1"
-  # Check for the mode/file extension"
-  if [ "$mode" == "python" ] || [ "$mode" == "Python" ] || [ "$mode" == ".py" ] || [[ $(isPython "$path") == "True" ]]; then
-    echo "python"
-  elif [ "$file" == "R" ] || [ "$mode" == ".R" ] || [ "$mode" == ".r" ] || [[ $(isR "$path") == "True" ]]; then
-    echo "R"
-  elif [ -d "$path" ]; then
-    echo "cd $path"
-  else
-    echo "Error: Invalid argument. Usage: ./tvim.sh <_> or <mode/file_extension>"
+# Determine application
+determine_app() {
+  local value="$1"
+  local r_condition="$2"
+  local py_condition="$3"
+  local type="$4"
+  local app=""
+  case "$value" in
+    ${r_condition})
+        app=R
+        ;;
+    ${py_condition})
+        app=python
+        ;;
+    *)
+    echo "Error: $type $value is not support yet."
     exit 1
-  fi
+    ;;
+  esac
+  echo "$app"
 }
 
-# Check for the number of arguments
-if [ $# -gt 1 ]; then
-  echo "Error: Invalid number of arguments. tvim takes 0 or 1 argument. Usage: ./tvim.sh <_> or <mode/file_extension/filename>"
-  exit 1
-fi
+# Define function to check if tmux session already exists
+session_exists() {
+  tmux has-session -t "$1" 2>/dev/null
+}
 
-# Check if tmux session exists
-tmux has-session -t "$sessionName"
+# Parse command line arguments
+while getopts ":m:" opt; do
+  case $opt in
+    m)
+      mode="$OPTARG"
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
 
-# If tmux session exists, open the tmux session
-if [ $? -eq 0 ]; then
-  read -p "Session $sessionName already exists. Do you want to overwrite it? (y/n) " -n 1 -r
-  echo
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-      tmux kill-session -t $sessionName
-      tmux new-session -s $sessionName -d
+# Get positional argument
+shift $((OPTIND -1))
+path="$1"
+file_ext="$(get_file_extension $path)"
+
+# Check if tvim session already exists
+if session_exists "tvim"; then
+  read -p "tvim session already exists. Do you want to overwrite it? [y/n] " overwrite
+  if [[ $overwrite == [Yy]* ]]; then
+    tmux kill-session -t "tvim"
   else
-      tmux attach -t $sessionName
+    echo "Exiting script."
+    exit 0
   fi
 else
-  # Create a new tmux session
-  tmux new-session -s "$sessionName" -d
+  echo "Create new session!"
 fi
-    
-# Split the window into two panes vertically
-tmux split-window -v -p 20
-    
-# Select the top window and open Vim
-tmux select-pane -t 0
 
-# If script has no argument, only trigger editor in top pane and do nothing with bottom pane  
-if [ $# -eq 0 ]; then
-  tmux send-keys "$(make_cmd_path $editor)" C-m
-# If script has oee argument, trigger editor based on path in top pane and trigger repl in bottom pane based on the mode.
+# Decide what application will be used in the bottom pane
+if [ -n "$mode" ]; then
+  app=$(determine_app "$mode" '@(r|R)' '@(python|Python|py|PYTHON|PY)' "mode")
+elif [ -n "$file_ext" ]; then
+  app=$(determine_app "$file_ext" '@(r|R)' "py" "file type")
+fi
+
+# Create new tmux session called tvim
+tmux new-session -d -s "$session" -n "$window"
+
+# Split window vertically
+tmux split-window -v -p 20 -t "${session}:${window}"
+
+# Open vim in top pane
+if [ -d "$path" ]; then
+  tmux send-keys -t "${session}:${window}.0" "cd $path" C-m
+  tmux send-keys -t "${session}:${window}.0" "$editor" C-m
+elif [ -f "$path" ]; then
+  tmux send-keys -t "${session}:${window}.0" "cd $(dirname $path)" C-m
+  tmux send-keys -t "${session}:${window}.0" "$editor $path" C-m
 else
-  path_or_mode="$1"
-
-  tmux send-keys "$(make_cmd_path $editor $path_or_mode)" C-m
-
-  # Select the bottom window and open the REPL
-  tmux select-pane -t 1
-
-  tmux send-keys "$(make_cmd_mode $path_or_mode)" C-m
-
-  # Go back to the top window
-  tmux select-pane -t 0
+  tmux send-keys -t "${session}:${window}.0" "$editor" C-m
 fi
 
-# Attach the tvim session
-tmux attach-session -t "$sessionName"
+# Get into right folder in bottom pane based path
+if [ -d "$path" ] 
+then
+  tmux send-keys -t "${session}:${window}.1" "cd $path" C-m
+  tmux send-keys -t "${session}:${window}.1" "clear" C-m
+elif [ -f "$path" ] 
+then
+  tmux send-keys -t "${session}:${window}.1" "cd $(dirname $path)" C-m
+  tmux send-keys -t "${session}:${window}.1" "clear" C-m
+fi
+
+if [ -n "$app" ]; then
+  tmux send-keys -t "${session}:${window}.1" "$app" C-m
+fi
+
+# Attach to tvim session
+tmux select-pane -t "${session}:${window}.0"
+tmux attach-session -t "${session}"
