@@ -3,11 +3,12 @@
 shopt -s extglob
 
 # --- Constants ---
-# Set default value for -m option
-# mode="bash"
-editor=nvim
 session=tvim
-window=editor
+editor_cmd=nvim
+editor_window=Editor
+terminal_window=Terminal
+top_pane=0
+bottom_pane=1
 
 # -- Functions ---
 # Get file extension
@@ -40,6 +41,32 @@ determine_app() {
     ;;
   esac
   echo "$app"
+}
+
+# Run cmd under path. First cd into the path. Then run cmd.
+run_cmd_in_path () {
+  local path="$1"
+  local session="$2"
+  local window="$3"
+  local cmd="$4"
+  local pane="${5-$top_pane}"
+  local apply_on_path="${6-False}"
+
+  if [ -d "$path" ] 
+  then
+    (tmux send-keys -t "${session}:${window}.${pane}" "cd $path" C-m)
+    (tmux send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+  elif [ -f "$path" ] 
+  then
+    (tmux send-keys -t "${session}:${window}.${pane}" "cd $(dirname $path)" C-m)
+    if [[ $apply_on_path == "True" ]]; then
+      (tmux send-keys -t "${session}:${window}.${pane}" "$cmd $path" C-m)
+    else
+      (tmux send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+    fi
+  else
+    (tmux send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+  fi
 }
 
 # Define function to check if tmux session already exists
@@ -90,37 +117,32 @@ elif [ -n "$file_ext" ]; then
 fi
 
 # Create new tmux session called tvim
-tmux new-session -d -s "$session" -n "$window"
+tmux new-session -d -s "$session" -n "$editor_window"
 
 # Split window vertically
-tmux split-window -v -p 20 -t "${session}:${window}"
+tmux split-window -v -p 10 -t "${session}:${editor_window}"
 
 # Open vim in top pane
-if [ -d "$path" ]; then
-  tmux send-keys -t "${session}:${window}.0" "cd $path" C-m
-  tmux send-keys -t "${session}:${window}.0" "$editor" C-m
-elif [ -f "$path" ]; then
-  tmux send-keys -t "${session}:${window}.0" "cd $(dirname $path)" C-m
-  tmux send-keys -t "${session}:${window}.0" "$editor $path" C-m
-else
-  tmux send-keys -t "${session}:${window}.0" "$editor" C-m
-fi
+run_cmd_in_path "$path" "$session" "$editor_window" "$editor_cmd" "$top_pane" "True"
 
 # Get into right folder in bottom pane based path
-if [ -d "$path" ] 
-then
-  tmux send-keys -t "${session}:${window}.1" "cd $path" C-m
-  tmux send-keys -t "${session}:${window}.1" "clear" C-m
-elif [ -f "$path" ] 
-then
-  tmux send-keys -t "${session}:${window}.1" "cd $(dirname $path)" C-m
-  tmux send-keys -t "${session}:${window}.1" "clear" C-m
+run_cmd_in_path "$path" "$session" "$editor_window" "clear" "$bottom_pane"
+
+
+# If app existed, run app in bottom pane in editor window
+if [ -n "$app" ]; then
+  tmux send-keys -t "${session}:${editor_window}.${bottom_pane}" "$app" C-m
 fi
 
-if [ -n "$app" ]; then
-  tmux send-keys -t "${session}:${window}.1" "$app" C-m
-fi
+# Create terminal window
+tmux new-window -n "${terminal_window}" -t "${session}"
+
+# Get into right folder in terminal window
+run_cmd_in_path "$path" "$session" "$terminal_window" "clear"
+
+# Leave the terminal window and select editor window
+tmux select-window -t "${session}:${editor_window}"
 
 # Attach to tvim session
-tmux select-pane -t "${session}:${window}.0"
+tmux select-pane -t "${session}:${editor_window}.${top_pane}"
 tmux attach-session -t "${session}"
