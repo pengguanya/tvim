@@ -3,6 +3,7 @@
 shopt -s extglob
 
 # --- Constants ---
+socket=tvim_socket
 session=tvim
 editor_cmd=nvim
 editor_window=Editor
@@ -10,7 +11,18 @@ terminal_window=Terminal
 top_pane=0
 bottom_pane=1
 
+
 # -- Functions ---
+# tmux command conditioned on socket
+tmux_cmd() {
+  local socket="$1"
+  if [ -n "$socket" ]; then
+    echo tmux -L "$socket"
+  else
+    echo tmux
+  fi
+}
+
 # Get file extension
 get_file_extension() {
   filename=$1
@@ -54,24 +66,24 @@ run_cmd_in_path () {
 
   if [ -d "$path" ] 
   then
-    (tmux send-keys -t "${session}:${window}.${pane}" "cd $path" C-m)
-    (tmux send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "cd $path" C-m)
+    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
   elif [ -f "$path" ] 
   then
-    (tmux send-keys -t "${session}:${window}.${pane}" "cd $(dirname $path)" C-m)
+    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "cd $(dirname $path)" C-m)
     if [[ $apply_on_path == "True" ]]; then
-      (tmux send-keys -t "${session}:${window}.${pane}" "$cmd $path" C-m)
+      ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd $path" C-m)
     else
-      (tmux send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+      ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
     fi
   else
-    (tmux send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
   fi
 }
 
 # Define function to check if tmux session already exists
 session_exists() {
-  tmux has-session -t "$1" 2>/dev/null
+  $(tmux_cmd "$socket") has-session -t "$1" 2>/dev/null
 }
 
 # Parse command line arguments
@@ -100,7 +112,8 @@ file_ext="$(get_file_extension $path)"
 if session_exists "tvim"; then
   read -p "tvim session already exists. Do you want to overwrite it? [y/n] " overwrite
   if [[ $overwrite == [Yy]* ]]; then
-    tmux kill-session -t "tvim"
+    $(tmux_cmd "$socket") kill-session -t "tvim"
+    $(tmux_cmd "$socket") kill-server # make sure only one session running in socket
   else
     echo "Exiting script."
     exit 0
@@ -117,32 +130,37 @@ elif [ -n "$file_ext" ]; then
 fi
 
 # Create new tmux session called tvim
-tmux new-session -d -s "$session" -n "$editor_window"
+if [ -n $TVIM_TMUX_CONFIG ]; then
+  echo "A"
+  $(tmux_cmd "$socket") -f "$TVIM_TMUX_CONFIG" new-session -d -s "$session" -n "$editor_window"
+  echo "B"
+else 
+  $(tmux_cmd "$socket") new-session -d -s "$session" -n "$editor_window"
+fi
 
 # Split window vertically
-tmux split-window -v -p 10 -t "${session}:${editor_window}"
+$(tmux_cmd "$socket") split-window -v -p 10 -t "${session}:${editor_window}"
 
 # Open vim in top pane
 run_cmd_in_path "$path" "$session" "$editor_window" "$editor_cmd" "$top_pane" "True"
-
+#
 # Get into right folder in bottom pane based path
 run_cmd_in_path "$path" "$session" "$editor_window" "clear" "$bottom_pane"
 
-
 # If app existed, run app in bottom pane in editor window
 if [ -n "$app" ]; then
-  tmux send-keys -t "${session}:${editor_window}.${bottom_pane}" "$app" C-m
+  $(tmux_cmd "$socket") send-keys -t "${session}:${editor_window}.${bottom_pane}" "$app" C-m
 fi
 
 # Create terminal window
-tmux new-window -n "${terminal_window}" -t "${session}"
+$(tmux_cmd "$socket") new-window -n "${terminal_window}" -t "${session}"
 
 # Get into right folder in terminal window
 run_cmd_in_path "$path" "$session" "$terminal_window" "clear"
 
 # Leave the terminal window and select editor window
-tmux select-window -t "${session}:${editor_window}"
+$(tmux_cmd "$socket") select-window -t "${session}:${editor_window}"
 
 # Attach to tvim session
-tmux select-pane -t "${session}:${editor_window}.${top_pane}"
-tmux attach-session -t "${session}"
+$(tmux_cmd "$socket") select-pane -t "${session}:${editor_window}.${top_pane}"
+$(tmux_cmd "$socket") attach-session -t "${session}"
