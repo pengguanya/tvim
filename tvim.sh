@@ -8,8 +8,8 @@ session=tvim
 editor_cmd=nvim
 editor_window=Editor
 terminal_window=Terminal
-top_pane=0
-bottom_pane=1
+edit_pane=0
+repl_pane=1
 
 
 # -- Functions ---
@@ -61,7 +61,7 @@ run_cmd_in_path () {
   local session="$2"
   local window="$3"
   local cmd="$4"
-  local pane="${5-$top_pane}"
+  local pane="${5-$edit_pane}"
   local apply_on_path="${6-False}"
 
   if [ -d "$path" ] 
@@ -142,14 +142,14 @@ fi
 $(tmux_cmd "$socket") split-window -v -p 10 -t "${session}:${editor_window}"
 
 # Open vim in top pane
-run_cmd_in_path "$path" "$session" "$editor_window" "$editor_cmd" "$top_pane" "True"
+run_cmd_in_path "$path" "$session" "$editor_window" "$editor_cmd" "$edit_pane" "True"
 #
 # Get into right folder in bottom pane based path
-run_cmd_in_path "$path" "$session" "$editor_window" "clear" "$bottom_pane"
+run_cmd_in_path "$path" "$session" "$editor_window" "clear" "$repl_pane"
 
 # If app existed, run app in bottom pane in editor window
 if [ -n "$app" ]; then
-  $(tmux_cmd "$socket") send-keys -t "${session}:${editor_window}.${bottom_pane}" "$app" C-m
+  $(tmux_cmd "$socket") send-keys -t "${session}:${editor_window}.${repl_pane}" "$app" C-m
 fi
 
 # Create terminal window
@@ -162,5 +162,5 @@ run_cmd_in_path "$path" "$session" "$terminal_window" "clear"
 $(tmux_cmd "$socket") select-window -t "${session}:${editor_window}"
 
 # Attach to tvim session
-$(tmux_cmd "$socket") select-pane -t "${session}:${editor_window}.${top_pane}"
+$(tmux_cmd "$socket") select-pane -t "${session}:${editor_window}.${edit_pane}"
 $(tmux_cmd "$socket") attach-session -t "${session}"
