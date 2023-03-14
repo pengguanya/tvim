@@ -11,7 +11,6 @@ terminal_window=Terminal
 edit_pane=0
 repl_pane=1
 
-
 # -- Functions ---
 # tmux command conditioned on socket
 tmux_cmd() {
@@ -72,7 +71,7 @@ run_cmd_in_path () {
   then
     ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "cd $(dirname $path)" C-m)
     if [[ $apply_on_path == "True" ]]; then
-      ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd $path" C-m)
+      ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd $(basename $path)" C-m)
     else
       ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
     fi
