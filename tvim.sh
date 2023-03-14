@@ -35,9 +35,10 @@ get_file_extension() {
 # Determine application
 determine_app() {
   local value="$1"
-  local r_condition="$2"
-  local py_condition="$3"
-  local type="$4"
+  local type="$2"
+  local r_condition="$3"
+  local py_condition="$4"
+  local sh_condition="$5"
   local app=""
   case "$value" in
     ${r_condition})
@@ -45,6 +46,9 @@ determine_app() {
         ;;
     ${py_condition})
         app=python
+        ;;
+    ${sh_condition})
+        :
         ;;
     *)
     echo "Error: $type $value is not support yet."
@@ -123,9 +127,9 @@ fi
 
 # Decide what application will be used in the bottom pane
 if [ -n "$mode" ]; then
-  app=$(determine_app "$mode" '@(r|R)' '@(python|Python|py|PYTHON|PY)' "mode")
+  app=$(determine_app "$mode" "mode" '@(r|R)' '@(python|Python|py|PYTHON|PY)' '@(sh|bash|Bash|SH)')
 elif [ -n "$file_ext" ]; then
-  app=$(determine_app "$file_ext" '@(r|R)' "py" "file type")
+  app=$(determine_app "$file_ext" "file type" '@(r|R)' "py" 'sh')
 fi
 
 # Create new tmux session called tvim
