@@ -69,19 +69,18 @@ run_cmd_in_path () {
 
   if [ -d "$path" ] 
   then
-    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "cd $path" C-m)
-    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+    local cd_cmd="cd $path &&"
   elif [ -f "$path" ] 
   then
-    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "cd $(dirname $path)" C-m)
+    local cd_cmd="cd $(dirname $path) &&"
     if [[ $apply_on_path == "True" ]]; then
-      ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd $(basename $path)" C-m)
-    else
-      ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
+      local filename=$(basename "$path")
+      cmd="$cmd $filename"
     fi
-  else
-    ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
   fi
+  local vim_cmd="$cd_cmd $cmd"
+
+  ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$vim_cmd" C-m)
 }
 
 # Define function to check if tmux session already exists
