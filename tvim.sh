@@ -83,6 +83,22 @@ run_cmd_in_path () {
   ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$vim_cmd" C-m)
 }
 
+# Function to define session name based on path
+session_name() {
+  local path="$1"
+  local session_name
+  local dirpath
+  if [[ -n $path ]] && [[ -d $path ]]; then
+    session_name="$(basename "$path" | tr . -)"
+  elif [[ -n $path ]] && [[ -f $path ]]; then
+    dirpath="$(dirname "$path" | tr . -)"
+    session_name="$(basename "$dirpath")"
+  else 
+    session_name="$(basename "$pwd" | tr . -)"
+  fi
+  echo "$session_name"
+}
+
 # Define function to check if tmux session already exists
 session_exists() {
   $(tmux_cmd "$socket") has-session -t "$1" 2>/dev/null
@@ -105,13 +121,19 @@ while getopts ":m:" opt; do
   esac
 done
 
+
 # Get positional argument
 shift $((OPTIND -1))
 path="$1"
 file_ext="$(get_file_extension $path)"
+echo "$(session_name $path)"
+if [[ $session != $(session_name $path) ]]; then
+  session="$(session_name $path)"
+  echo "New session name $session"
+fi
 
 # Check if tvim session already exists
-if session_exists "tvim"; then
+if session_exists "$session"; then
   read -p "tvim session already exists. Do you want to overwrite it? [y/n] " overwrite
   if [[ $overwrite == [Yy]* ]]; then
     $(tmux_cmd "$socket") kill-session -t "tvim"
@@ -132,10 +154,8 @@ elif [ -n "$file_ext" ]; then
 fi
 
 # Create new tmux session called tvim
-if [ -n $TVIM_TMUX_CONFIG ]; then
-  echo "A"
+if [[ -n $TVIM_TMUX_CONFIG ]]; then
   $(tmux_cmd "$socket") -f "$TVIM_TMUX_CONFIG" new-session -d -s "$session" -n "$editor_window"
-  echo "B"
 else 
   $(tmux_cmd "$socket") new-session -d -s "$session" -n "$editor_window"
 fi
