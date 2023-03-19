@@ -26,7 +26,7 @@ tmux_cmd() {
 get_file_extension() {
   filename=$1
   extension="${filename##*.}"
-  if [ "$extension" = "$filename" ]; then
+  if [ ! -f "$filename"] || [ "$extension" = "$filename" ]; then
     extension=""
   fi
   echo "$extension"
@@ -94,8 +94,13 @@ session_name() {
     dirpath="$(dirname "$path" | tr . -)"
     session_name="$(basename "$dirpath")"
   else 
-    session_name="$(basename "$pwd" | tr . -)"
+    session_name="$(basename "$PWD" | tr . -)"
   fi
+
+  if [[ $session_name == "-" ]]; then
+    session_name="$(basename "$PWD" | tr . -)"    
+  fi
+
   echo "$session_name"
 }
 
