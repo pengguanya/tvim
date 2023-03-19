@@ -26,7 +26,7 @@ tmux_cmd() {
 get_file_extension() {
   filename=$1
   extension="${filename##*.}"
-  if [ ! -f "$filename"] || [ "$extension" = "$filename" ]; then
+  if [ ! -f "$filename" ] || [ "$extension" = "$filename" ]; then
     extension=""
   fi
   echo "$extension"
