@@ -10,7 +10,6 @@ editor_window=Editor
 terminal_window=Terminal
 edit_pane=0
 repl_pane=1
-
 # -- Functions ---
 # tmux command conditioned on socket
 tmux_cmd() {
@@ -131,24 +130,25 @@ done
 shift $((OPTIND -1))
 path="$1"
 file_ext="$(get_file_extension $path)"
-echo "$(session_name $path)"
 if [[ $session != $(session_name $path) ]]; then
   session="$(session_name $path)"
-  echo "New session name $session"
 fi
 
 # Check if tvim session already exists
 if session_exists "$session"; then
-  read -p "tvim session already exists. Do you want to overwrite it? [y/n] " overwrite
+  read -p "[${session}] session already exists. Do you want to overwrite it? [y/n]. Quit [Enter] " overwrite
   if [[ $overwrite == [Yy]* ]]; then
-    $(tmux_cmd "$socket") kill-session -t "tvim"
-    $(tmux_cmd "$socket") kill-server # make sure only one session running in socket
+    $(tmux_cmd "$socket") kill-session -t "$session"
+    # $(tmux_cmd "$socket") kill-server # make sure only one session running in socket
+  elif [[ $overwrite == [Nn]* ]]; then
+    $(tmux_cmd "$socket") attach-session -t "${session}"
+    exit 0
   else
     echo "Exiting script."
     exit 0
   fi
 else
-  echo "Create new session!"
+  echo "Create new session [${session}]!"
 fi
 
 # Decide what application will be used in the bottom pane
