@@ -132,10 +132,8 @@ elif [ -n "$file_ext" ]; then
 fi
 
 # Create new tmux session called tvim
-if [ -n $TVIM_TMUX_CONFIG ]; then
-  echo "A"
+if [[ -n $TVIM_TMUX_CONFIG ]]; then
   $(tmux_cmd "$socket") -f "$TVIM_TMUX_CONFIG" new-session -d -s "$session" -n "$editor_window"
-  echo "B"
 else 
   $(tmux_cmd "$socket") new-session -d -s "$session" -n "$editor_window"
 fi
