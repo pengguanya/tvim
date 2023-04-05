@@ -10,6 +10,8 @@ editor_window=Editor
 terminal_window=Terminal
 edit_pane=0
 repl_pane=1
+parent_dir=''
+
 # -- Functions ---
 # tmux command conditioned on socket
 tmux_cmd() {
@@ -158,11 +160,27 @@ elif [ -n "$file_ext" ]; then
   app=$(determine_app "$file_ext" "file type" '@(r|R)' "py" 'sh')
 fi
 
+# Determine parent dir
+if [ -z "$path" ]; then
+  parent_dir="$PWD"
+elif [ -d "$path" ]; then
+  parent_dir="$path"
+else
+  parent_dir="$(dirname "$path")"
+fi
+
 # Create new tmux session called tvim
 if [[ -n $TVIM_TMUX_CONFIG ]]; then
   $(tmux_cmd "$socket") -f "$TVIM_TMUX_CONFIG" new-session -d -s "$session" -n "$editor_window"
 else 
   $(tmux_cmd "$socket") new-session -d -s "$session" -n "$editor_window"
+fi
+
+# Activate virtual environment if Poetry is setup in project folder
+if [ -d "$parent_dir" ] && ( [ -f "$parent_dir/poetry.lock" ] || [ -f "$parent_dir/pyproject.toml" ] ) && command -v poetry &> /dev/null; then
+  echo "Poetry setup is found in project folder. Activate virtual environment."
+  activate_venv="source "$(poetry env info --path)/bin/activate""
+  $(tmux_cmd "$socket") send-keys -t "$session" "$activate_venv" C-m
 fi
 
 # Split window vertically
