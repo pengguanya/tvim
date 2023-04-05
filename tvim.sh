@@ -10,7 +10,7 @@ editor_window=Editor
 terminal_window=Terminal
 edit_pane=0
 repl_pane=1
-parent_dir=''
+project_dir=''
 
 # -- Functions ---
 # tmux command conditioned on socket
@@ -82,6 +82,21 @@ run_cmd_in_path () {
   local vim_cmd="$cd_cmd $cmd"
 
   ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$vim_cmd" C-m)
+}
+
+# Set the path variable for python virtual environment and run command
+set_path_run() {
+  local cmd="$1"
+  if [ -d ".venv" ] && ( [ -f "poetry.lock" ] || [ -f "pyproject.toml" ] ) && command -v poetry &> /dev/null; then
+    if [[ -n $VIRTUAL_ENV ]]; then
+      new_path="$VIRTUAL_ENV/bin:$PATH"
+    else
+      new_path="$PWD/.venv/bin:$PATH"
+    fi  
+    echo "export PATH=$new_path && $cmd"
+  else
+    echo "$cmd"
+  fi
 }
 
 # Function to define session name based on path
@@ -160,13 +175,20 @@ elif [ -n "$file_ext" ]; then
   app=$(determine_app "$file_ext" "file type" '@(r|R)' "py" 'sh')
 fi
 
-# Determine parent dir
+# Determine project dir
 if [ -z "$path" ]; then
-  parent_dir="$PWD"
+  project_dir="$PWD"
 elif [ -d "$path" ]; then
-  parent_dir="$path"
+  project_dir="${path%/}"
 else
-  parent_dir="$(dirname "$path")"
+  project_dir="$(dirname "$path")"
+fi
+
+# Activate virtual environment if Poetry is setup in project folder
+if [ -d "$project_dir" ] && ( [ -f "${project_dir}/poetry.lock" ] || [ -f "${project_dir}/pyproject.toml" ] ) && command -v poetry &> /dev/null; then
+  echo "Poetry setup is found in project folder. Activate virtual environment."
+  cd "$project_dir"
+  source "$(poetry env info --path)/bin/activate"
 fi
 
 # Create new tmux session called tvim
@@ -176,21 +198,14 @@ else
   $(tmux_cmd "$socket") new-session -d -s "$session" -n "$editor_window"
 fi
 
-# Activate virtual environment if Poetry is setup in project folder
-if [ -d "$parent_dir" ] && ( [ -f "$parent_dir/poetry.lock" ] || [ -f "$parent_dir/pyproject.toml" ] ) && command -v poetry &> /dev/null; then
-  echo "Poetry setup is found in project folder. Activate virtual environment."
-  activate_venv="source "$(poetry env info --path)/bin/activate""
-  $(tmux_cmd "$socket") send-keys -t "$session" "$activate_venv" C-m
-fi
-
 # Split window vertically
 $(tmux_cmd "$socket") split-window -v -p 10 -t "${session}:${editor_window}"
 
 # Open vim in top pane
-run_cmd_in_path "$path" "$session" "$editor_window" "$editor_cmd" "$edit_pane" "True"
-#
+run_cmd_in_path "$path" "$session" "$editor_window" "$(set_path_run "$editor_cmd")" "$edit_pane" "True"
+
 # Get into right folder in bottom pane based path
-run_cmd_in_path "$path" "$session" "$editor_window" "clear" "$repl_pane"
+run_cmd_in_path "$path" "$session" "$editor_window" "$(set_path_run "clear")" "$repl_pane"
 
 # If app existed, run app in bottom pane in editor window
 if [ -n "$app" ]; then
@@ -201,7 +216,7 @@ fi
 $(tmux_cmd "$socket") new-window -n "${terminal_window}" -t "${session}"
 
 # Get into right folder in terminal window
-run_cmd_in_path "$path" "$session" "$terminal_window" "clear"
+run_cmd_in_path "$path" "$session" "$terminal_window" "$(set_path_run "clear")"
 
 # Leave the terminal window and select editor window
 $(tmux_cmd "$socket") select-window -t "${session}:${editor_window}"
