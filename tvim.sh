@@ -99,24 +99,29 @@ set_path_run() {
   fi
 }
 
+# Extracts dirname from path, sanitizes for tmux session name.
+sanitize() {
+  local input="$1"
+  sanitized=$(echo "$input" | sed -E 's/[^a-zA-Z0-9]+/-/g; s/^-+|-+$//g')
+  echo "$sanitized"
+}
+
 # Function to define session name based on path
 session_name() {
   local path="$1"
-  local session_name
-  local dirpath
-  if [[ -n $path ]] && [[ -d $path ]]; then
-    session_name="$(basename "$path" | tr . -)"
-  elif [[ -n $path ]] && [[ -f $path ]]; then
-    dirpath="$(dirname "$path" | tr . -)"
-    session_name="$(basename "$dirpath")"
-  else 
-    session_name="$(basename "$PWD" | tr . -)"
+  local session_name=""
+  
+  if [[ -d "$path" ]]; then
+    dir_name=$(basename "$path")
+    session_name=$(sanitize "$dir_name")
+  elif [[ -f "$path" ]]; then
+    filename=$(basename "$path")
+    filename_no_ext=$(echo "$filename" | sed -E 's/(.+)\..+/\1/')
+    session_name=$(sanitize "$filename_no_ext")
+  else
+    session_name=$(basename "$PWD")
   fi
-
-  if [[ $session_name == "-" ]]; then
-    session_name="$(basename "$PWD" | tr . -)"    
-  fi
-
+  
   echo "$session_name"
 }
 
