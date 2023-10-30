@@ -10,7 +10,7 @@ editor_window=Editor
 terminal_window=Terminal
 edit_pane=0
 repl_pane=1
-project_dir=''
+#project_dir=''
 
 # -- Functions ---
 # tmux command conditioned on socket
@@ -59,44 +59,14 @@ determine_app() {
   echo "$app"
 }
 
-# Run cmd under path. First cd into the path. Then run cmd.
-run_cmd_in_path () {
-  local path="$1"
-  local session="$2"
-  local window="$3"
-  local cmd="$4"
-  local pane="${5-$edit_pane}"
-  local apply_on_path="${6-False}"
+# Run cmd in tmux session
+run_cmd_in_tmux () {
+  local session="$1"
+  local window="$2"
+  local cmd="$3"
+  local pane="${4-$edit_pane}"
 
-  if [ -d "$path" ] 
-  then
-    local cd_cmd="cd $path &&"
-  elif [ -f "$path" ] 
-  then
-    local cd_cmd="cd $(dirname $path) &&"
-    if [[ $apply_on_path == "True" ]]; then
-      local filename=$(basename "$path")
-      cmd="$cmd $filename"
-    fi
-  fi
-  local vim_cmd="$cd_cmd $cmd"
-
-  ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$vim_cmd" C-m)
-}
-
-# Set the path variable for python virtual environment and run command
-set_path_run() {
-  local cmd="$1"
-  if [ -d ".venv" ] && ( [ -f "poetry.lock" ] || [ -f "pyproject.toml" ] ) && command -v poetry &> /dev/null; then
-    if [[ -n $VIRTUAL_ENV ]]; then
-      new_path="$VIRTUAL_ENV/bin:$PATH"
-    else
-      new_path="$PWD/.venv/bin:$PATH"
-    fi  
-    echo "export PATH=$new_path && $cmd"
-  else
-    echo "$cmd"
-  fi
+  ($(tmux_cmd "$socket") send-keys -t "${session}:${window}.${pane}" "$cmd" C-m)
 }
 
 # Extracts dirname from path, sanitizes for tmux session name.
@@ -128,6 +98,12 @@ session_name() {
 # Define function to check if tmux session already exists
 session_exists() {
   $(tmux_cmd "$socket") has-session -t "$1" 2>/dev/null
+}
+
+openfile () {
+  local cmd="$1"
+  local filename="$2"
+  echo "$cmd $filename"
 }
 
 # Parse command line arguments
@@ -182,46 +158,38 @@ fi
 
 # Determine project dir
 if [ -z "$path" ]; then
-  project_dir="$PWD"
+  fullpath="$PWD"
 elif [ -d "$path" ]; then
-  project_dir="${path%/}"
-else
-  project_dir="$(dirname "$path")"
+  fullpath="$(realpath "${path%/}")"
+elif [ -f "$path" ]; then
+  fullpath="$(realpath "$(dirname "$path")")"
+  filename="$(basename "$path")"
 fi
 
-# Activate virtual environment if Poetry is setup in project folder
-if [ -d "$project_dir" ] && ( [ -f "${project_dir}/poetry.lock" ] || [ -f "${project_dir}/pyproject.toml" ] ) && command -v poetry &> /dev/null; then
-  echo "Poetry setup is found in project folder. Activate virtual environment."
-  cd "$project_dir"
-  source "$(poetry env info --path)/bin/activate"
-fi
-
-# Create new tmux session called tvim
+# Create new tmux session
 if [[ -n $TVIM_TMUX_CONFIG ]]; then
-  $(tmux_cmd "$socket") -f "$TVIM_TMUX_CONFIG" new-session -d -s "$session" -n "$editor_window"
+  $(tmux_cmd "$socket") -f "$TVIM_TMUX_CONFIG" new-session -c "$fullpath" -d -s "$session" -n "$editor_window"
 else 
-  $(tmux_cmd "$socket") new-session -d -s "$session" -n "$editor_window"
+  $(tmux_cmd "$socket") new-session -c "$fullpath" -d -s "$session" -n "$editor_window"
 fi
+
 
 # Split window vertically
-$(tmux_cmd "$socket") split-window -v -p 10 -t "${session}:${editor_window}"
+$(tmux_cmd "$socket") split-window -c "$fullpath" -v -p 10 -t "${session}:${editor_window}"
 
 # Open vim in top pane
-run_cmd_in_path "$path" "$session" "$editor_window" "$(set_path_run "$editor_cmd")" "$edit_pane" "True"
+run_cmd_in_tmux "$session" "$editor_window" "$(openfile "$editor_cmd" "$filename")"
 
 # Get into right folder in bottom pane based path
-run_cmd_in_path "$path" "$session" "$editor_window" "$(set_path_run "clear")" "$repl_pane"
 
 # If app existed, run app in bottom pane in editor window
 if [ -n "$app" ]; then
-  $(tmux_cmd "$socket") send-keys -t "${session}:${editor_window}.${repl_pane}" "$app" C-m
+  run_cmd_in_tmux "$session" "$editor_window" "clear"  "$repl_pane"
+  run_cmd_in_tmux "$session" "$editor_window" "$app"  "$repl_pane"
 fi
 
 # Create terminal window
-$(tmux_cmd "$socket") new-window -n "${terminal_window}" -t "${session}"
-
-# Get into right folder in terminal window
-run_cmd_in_path "$path" "$session" "$terminal_window" "$(set_path_run "clear")"
+$(tmux_cmd "$socket") new-window -c "$fullpath" -n "${terminal_window}" -t "${session}"
 
 # Leave the terminal window and select editor window
 $(tmux_cmd "$socket") select-window -t "${session}:${editor_window}"
