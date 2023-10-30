@@ -3,7 +3,7 @@
 shopt -s extglob
 
 # --- Constants ---
-socket=tvim_socket
+socket=default   # tvim_socket
 session=tvim
 editor_cmd=nvim
 editor_window=Editor
