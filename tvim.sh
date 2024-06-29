@@ -8,8 +8,9 @@ session=tvim
 editor_cmd=nvim
 editor_window=Editor
 terminal_window=Terminal
-edit_pane=0
-repl_pane=1
+base_index=$(tmux show-options -g base-index | cut -d ' ' -f 2)
+edit_pane=$base_index
+repl_pane=$((edit_pane + 1))
 #project_dir=''
 
 # -- Functions ---
