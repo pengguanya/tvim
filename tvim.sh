@@ -127,7 +127,7 @@ done
 
 # Get positional argument
 shift $((OPTIND -1))
-path="$1"
+path="$(realpath $1)"
 file_ext="$(get_file_extension $path)"
 if [[ $session != $(session_name $path) ]]; then
   session="$(session_name $path)"
