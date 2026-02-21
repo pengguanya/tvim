@@ -3,7 +3,7 @@
 shopt -s extglob
 
 # --- Constants ---
-socket=default   # tvim_socket
+socket=tvim   # Separate socket so tvim doesn't share server with regular tmux
 session=tvim
 editor_cmd=nvim
 editor_window=Editor
@@ -167,12 +167,9 @@ elif [ -f "$path" ]; then
   filename="$(basename "$path")"
 fi
 
-# Create new tmux session
-if [[ -n $TVIM_TMUX_CONFIG ]]; then
-  $(tmux_cmd "$socket") -f "$TVIM_TMUX_CONFIG" new-session -c "$fullpath" -d -s "$session" -n "$editor_window"
-else 
-  $(tmux_cmd "$socket") new-session -c "$fullpath" -d -s "$session" -n "$editor_window"
-fi
+# Create new tmux session (use tvim config by default)
+tvim_config="${TVIM_TMUX_CONFIG:-$HOME/.tmux-tvim.conf}"
+$(tmux_cmd "$socket") -f "$tvim_config" new-session -c "$fullpath" -d -s "$session" -n "$editor_window"
 
 
 # Split window vertically
